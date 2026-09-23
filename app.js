@@ -365,20 +365,6 @@ function bindTabBar() {
   $$('.tab').forEach(t => t.addEventListener('click', () => switchScreen(t.dataset.screen)));
 }
 
-async function dailyBackup() {
-  try {
-    const todayKey = new Date().toISOString().slice(0, 10);
-    if (localStorage.getItem('closet-backup-date') === todayKey) return;
-    const meta = Array.from(items.values()).map(i => ({ id: i.id, category: i.category, createdAt: i.createdAt }));
-    const res = await fetch('https://appointee-unnoticed-donated.ngrok-free.dev/api/app-backup/closet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(meta),
-    });
-    if (res.ok) localStorage.setItem('closet-backup-date', todayKey);
-  } catch (e) { /* offline or PC off: skip silently */ }
-}
-
 async function init() {
   bindCanvasEvents();
   bindWardrobeEvents();
@@ -395,7 +381,6 @@ async function init() {
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; location.reload(); });
   }
-  setTimeout(dailyBackup, 3000);
 }
 
 init();
