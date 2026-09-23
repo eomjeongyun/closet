@@ -123,7 +123,10 @@ button:focus-visible { outline: 3px solid var(--pink-deep); outline-offset: 2px;
 }
 .canvas-item.selected .item-resize { display: block; }
 
+.wardrobe-summary { margin: 0 0 12px; font-family: 'Pretendard', sans-serif; font-size: 13px; color: var(--muted); }
+
 .category-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+.category-tabs.sub-tabs { margin-top: -8px; }
 .category-tab {
   flex: none;
   padding: 8px 14px;
@@ -136,6 +139,8 @@ button:focus-visible { outline: 3px solid var(--pink-deep); outline-offset: 2px;
   white-space: nowrap;
 }
 .category-tab.active { background: var(--pink); border-color: var(--pink-deep); color: var(--pink-deep); font-weight: 600; }
+.category-tab.sub { font-size: 12px; padding: 6px 12px; background: var(--pink-soft); }
+.category-tab.sub.active { background: var(--pink-deep); border-color: var(--pink-deep); color: #fff; }
 
 .wardrobe-grid {
   display: grid;
@@ -174,6 +179,17 @@ button:focus-visible { outline: 3px solid var(--pink-deep); outline-offset: 2px;
   line-height: 1.5;
 }
 .wardrobe-item.armed .delete-mark { display: flex; }
+.wardrobe-item .price-tag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(74,59,63,.72);
+  color: #fff;
+  font-family: 'Pretendard', sans-serif;
+  font-size: 10.5px;
+}
 
 .add-button {
   position: fixed;
@@ -216,6 +232,22 @@ button:focus-visible { outline: 3px solid var(--pink-deep); outline-offset: 2px;
   font-size: 14px;
 }
 .category-picker button.active { background: var(--pink); border-color: var(--pink-deep); color: var(--pink-deep); font-weight: 600; }
+.category-picker.sub-picker { margin-top: -10px; }
+.category-picker.sub-picker button { padding: 7px 13px; font-size: 13px; background: var(--pink-soft); }
+.category-picker.sub-picker button.active { background: var(--pink-deep); border-color: var(--pink-deep); color: #fff; }
+.price-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 13px;
+  background: var(--pink-soft);
+  color: var(--ink);
+  font-size: 15px;
+  text-align: center;
+}
+.price-input::placeholder { color: var(--muted); }
 .sheet-actions { display: flex; gap: 10px; }
 .sheet-actions button { flex: 1; padding: 13px; border-radius: 13px; border: 2px solid var(--line); background: #fff; font-family: 'Pretendard', sans-serif; font-size: 15px; }
 .primary-button { background: var(--pink-deep) !important; border-color: #b36781 !important; color: #fff !important; }

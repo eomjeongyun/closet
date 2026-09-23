@@ -5,15 +5,35 @@ import { removeBackground } from './onnx/background-removal.min.mjs';
 const ONNX_PUBLIC_PATH = new URL('./onnx/', import.meta.url).href;
 const DB_NAME = 'closet';
 const DB_VERSION = 1;
-const CATEGORIES = ['상의', '하의', '치마', '바지', '신발'];
+const CATEGORY_GROUPS = [
+  { id: '상의', subs: ['반팔', '긴팔', '나시', '셔츠', '후드티'] },
+  { id: '하의', subs: ['바지', '치마', '원피스'] },
+  { id: '아우터', subs: ['코트', '자켓', '점퍼'] },
+  { id: '악세사리', subs: ['속옷', '목걸이/악세사리'] },
+  { id: '양말', subs: [] },
+  { id: '신발', subs: [] },
+];
+// Old flat category values (from before the group/sub split) mapped onto the new shape,
+// so clothes she already tagged don't just vanish from the wardrobe after this update.
+const LEGACY_CATEGORY_MAP = {
+  '상의': { group: '상의', sub: null },
+  '하의': { group: '하의', sub: null },
+  '치마': { group: '하의', sub: '치마' },
+  '바지': { group: '하의', sub: '바지' },
+  '신발': { group: '신발', sub: null },
+};
+function groupById(id) { return CATEGORY_GROUPS.find(g => g.id === id); }
+function formatWon(n) { return `${n.toLocaleString('ko-KR')}원`; }
 
 const $ = s => document.querySelector(s);
 let db;
 let items = new Map();
 let canvasState = { id: 'home', placements: [] };
-let activeCategory = '전체';
+let activeGroup = '전체';
+let activeSub = '전체';
 let pendingImage = null;
-let pendingCategory = CATEGORIES[0];
+let pendingGroup = CATEGORY_GROUPS[0].id;
+let pendingSub = CATEGORY_GROUPS[0].subs[0];
 let selectedPlacementId = null;
 let armedDeleteId = null;
 let canvasSaveTimer = null;
@@ -73,7 +93,19 @@ function $$(sel) { return Array.from(document.querySelectorAll(sel)); }
 
 async function loadAll() {
   const list = await idbGetAll('items');
+  const migrated = [];
+  for (const it of list) {
+    if (it.group === undefined) {
+      const legacy = LEGACY_CATEGORY_MAP[it.category] || { group: '상의', sub: null };
+      it.group = legacy.group;
+      it.sub = legacy.sub;
+      delete it.category;
+      if (it.price === undefined) it.price = null;
+      migrated.push(it);
+    }
+  }
   items = new Map(list.map(i => [i.id, i]));
+  if (migrated.length) { for (const it of migrated) idbPut('items', it).catch(() => {}); }
   const canvasRows = await idbGetAll('canvas');
   const home = canvasRows.find(r => r.id === 'home');
   if (home) canvasState = home;
@@ -101,7 +133,7 @@ function renderCanvas() {
     el.style.top = `${p.y}px`;
     el.style.width = `${p.w}px`;
     el.style.height = `${h}px`;
-    el.innerHTML = `<img src="${item.image}" alt="${item.category}" draggable="false"><button class="item-remove" type="button" aria-label="빼기">×</button><div class="item-resize"></div>`;
+    el.innerHTML = `<img src="${item.image}" alt="${item.sub || item.group}" draggable="false"><button class="item-remove" type="button" aria-label="빼기">×</button><div class="item-resize"></div>`;
     canvas.appendChild(el);
   });
 }
@@ -189,23 +221,40 @@ function addItemToCanvas(itemId) {
 
 function renderCategoryTabs() {
   const wrap = $('#categoryTabs');
-  const tabs = ['전체', ...CATEGORIES];
-  wrap.innerHTML = tabs.map(c => `<button class="category-tab${c === activeCategory ? ' active' : ''}" data-category="${c}" type="button">${c}</button>`).join('');
+  const groupIds = ['전체', ...CATEGORY_GROUPS.map(g => g.id)];
+  wrap.innerHTML = groupIds.map(id => `<button class="category-tab${id === activeGroup ? ' active' : ''}" data-group="${id}" type="button">${id}</button>`).join('');
+
+  const subWrap = $('#subCategoryTabs');
+  const group = groupById(activeGroup);
+  if (!group || !group.subs.length) {
+    subWrap.hidden = true;
+    subWrap.innerHTML = '';
+    return;
+  }
+  subWrap.hidden = false;
+  const subIds = ['전체', ...group.subs];
+  subWrap.innerHTML = subIds.map(id => `<button class="category-tab sub${id === activeSub ? ' active' : ''}" data-sub="${id}" type="button">${id}</button>`).join('');
 }
 
 function renderWardrobe() {
   renderCategoryTabs();
   const grid = $('#wardrobeGrid');
   const list = Array.from(items.values())
-    .filter(i => activeCategory === '전체' || i.category === activeCategory)
+    .filter(i => (activeGroup === '전체' || i.group === activeGroup) && (activeSub === '전체' || i.sub === activeSub))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const total = list.reduce((sum, i) => sum + (i.price || 0), 0);
+  const label = activeSub !== '전체' ? activeSub : activeGroup;
+  $('#wardrobeSummary').textContent = `${label} ${list.length}개 · ${formatWon(total)} 썼어요`;
+
   if (!list.length) {
     grid.innerHTML = '<p class="wardrobe-empty">아직 담긴 옷이 없어요<br>+ 버튼으로 옷 사진을 추가해보세요</p>';
     return;
   }
   grid.innerHTML = list.map(i => `
     <div class="wardrobe-item${armedDeleteId === i.id ? ' armed' : ''}" data-id="${i.id}">
-      <img src="${i.image}" alt="${i.category}" draggable="false">
+      <img src="${i.image}" alt="${i.sub || i.group}" draggable="false">
+      ${i.price ? `<span class="price-tag">${formatWon(i.price)}</span>` : ''}
       <div class="delete-mark">한 번 더 탭하면<br>삭제돼요</div>
     </div>
   `).join('');
@@ -215,7 +264,14 @@ function bindWardrobeEvents() {
   $('#categoryTabs').addEventListener('click', e => {
     const btn = e.target.closest('.category-tab');
     if (!btn) return;
-    activeCategory = btn.dataset.category;
+    activeGroup = btn.dataset.group;
+    activeSub = '전체';
+    renderWardrobe();
+  });
+  $('#subCategoryTabs').addEventListener('click', e => {
+    const btn = e.target.closest('.category-tab');
+    if (!btn) return;
+    activeSub = btn.dataset.sub;
     renderWardrobe();
   });
   $('#wardrobeGrid').addEventListener('click', async e => {
@@ -308,8 +364,10 @@ async function handlePhoto(file) {
     const dataURL = await blobToDataURL(finalBlob);
     const size = await imageSize(dataURL);
     pendingImage = { dataURL, w: size.w, h: size.h };
-    pendingCategory = CATEGORIES[0];
+    pendingGroup = CATEGORY_GROUPS[0].id;
+    pendingSub = CATEGORY_GROUPS[0].subs[0];
     $('#previewImage').src = dataURL;
+    $('#priceInput').value = '';
     renderCategoryPicker();
     $('#progressSheet').hidden = true;
     $('#categorySheet').hidden = false;
@@ -320,7 +378,17 @@ async function handlePhoto(file) {
 }
 
 function renderCategoryPicker() {
-  $('#categoryPicker').innerHTML = CATEGORIES.map(c => `<button type="button" data-category="${c}" class="${c === pendingCategory ? 'active' : ''}">${c}</button>`).join('');
+  $('#categoryPicker').innerHTML = CATEGORY_GROUPS.map(g => `<button type="button" data-group="${g.id}" class="${g.id === pendingGroup ? 'active' : ''}">${g.id}</button>`).join('');
+
+  const subWrap = $('#subCategoryPicker');
+  const group = groupById(pendingGroup);
+  if (!group.subs.length) {
+    subWrap.hidden = true;
+    subWrap.innerHTML = '';
+    return;
+  }
+  subWrap.hidden = false;
+  subWrap.innerHTML = group.subs.map(s => `<button type="button" data-sub="${s}" class="${s === pendingSub ? 'active' : ''}">${s}</button>`).join('');
 }
 
 function bindAddFlow() {
@@ -333,7 +401,15 @@ function bindAddFlow() {
   $('#categoryPicker').addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn) return;
-    pendingCategory = btn.dataset.category;
+    pendingGroup = btn.dataset.group;
+    const group = groupById(pendingGroup);
+    pendingSub = group.subs.length ? group.subs[0] : null;
+    renderCategoryPicker();
+  });
+  $('#subCategoryPicker').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    pendingSub = btn.dataset.sub;
     renderCategoryPicker();
   });
   $('#cancelSave').addEventListener('click', () => {
@@ -342,9 +418,13 @@ function bindAddFlow() {
   });
   $('#confirmSave').addEventListener('click', async () => {
     if (!pendingImage) return;
+    const priceRaw = $('#priceInput').value.trim();
+    const priceNum = priceRaw ? Math.max(0, Math.round(Number(priceRaw))) : null;
     const item = {
       id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
-      category: pendingCategory,
+      group: pendingGroup,
+      sub: pendingSub,
+      price: Number.isFinite(priceNum) ? priceNum : null,
       image: pendingImage.dataURL,
       w: pendingImage.w,
       h: pendingImage.h,
@@ -354,6 +434,7 @@ function bindAddFlow() {
     items.set(item.id, item);
     addItemToCanvas(item.id);
     pendingImage = null;
+    $('#priceInput').value = '';
     $('#categorySheet').hidden = true;
     switchScreen('home');
     renderCanvas();

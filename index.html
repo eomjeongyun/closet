@@ -33,7 +33,9 @@
       <header class="top-header">
         <h1>옷장</h1>
       </header>
+      <p id="wardrobeSummary" class="wardrobe-summary"></p>
       <div id="categoryTabs" class="category-tabs"></div>
+      <div id="subCategoryTabs" class="category-tabs sub-tabs" hidden></div>
       <div id="wardrobeGrid" class="wardrobe-grid"></div>
     </section>
   </main>
@@ -59,6 +61,8 @@
       <p class="sheet-title">어떤 옷이에요?</p>
       <img id="previewImage" class="preview-image" alt="옷 미리보기">
       <div id="categoryPicker" class="category-picker"></div>
+      <div id="subCategoryPicker" class="category-picker sub-picker" hidden></div>
+      <input id="priceInput" class="price-input" type="number" inputmode="numeric" min="0" step="1000" placeholder="구매 가격 (선택, 원)">
       <div class="sheet-actions">
         <button id="cancelSave" class="secondary-button" type="button">취소</button>
         <button id="confirmSave" class="primary-button" type="button">옷장에 담기</button>
